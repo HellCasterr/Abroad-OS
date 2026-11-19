@@ -9,8 +9,10 @@ await db.exec(`create role authenticated; create schema auth; create schema stor
   create function storage.foldername(name text) returns text[] language sql immutable as $$ select string_to_array(name,'/') $$;`);
 try {await db.exec(readFileSync(new URL('../supabase/migrations/202611190001_initial.sql',import.meta.url),'utf8').replace('create extension if not exists pgcrypto;',''));}
 catch(e){console.error('Migration failed:',e.message,e.detail||'');process.exit(1);}
+try {await db.exec(readFileSync(new URL('../supabase/migrations/202611200001_chat.sql',import.meta.url),'utf8'));}
+catch(e){console.error('Chat migration failed:',e.message,e.detail||'');process.exit(1);}
 const {rows}=await db.query("select count(*)::int as count from information_schema.tables where table_schema='public'");
-if(rows[0].count<18)throw new Error('Expected schema tables were not created');
+if(rows[0].count<23)throw new Error('Expected schema tables were not created');
 const a='11111111-1111-4111-8111-111111111111',b='22222222-2222-4222-8222-222222222222';
 await db.exec(`insert into auth.users(id) values ('${a}'),('${b}');
  insert into public.profiles(user_id,full_name) values ('${a}','Owner A'),('${b}','Owner B');
@@ -40,6 +42,23 @@ const file=files[0].id;
 const {rows:reqs}=await db.query(`insert into public.document_requirements(user_id,programme_id,label,accepted_formats,max_bytes) values ('${a}','${own}','Transcript',array['application/pdf'],5000) returning id,status`);
 if(reqs[0].status!=='missing')throw new Error('Requirement did not start missing');
 await forbidden(`update public.document_requirements set document_id='${file}' where id='${reqs[0].id}'`);
+await db.exec('reset role');
+const {rows:threadRows}=await db.query(`insert into public.chat_threads(user_id,title) values ('${a}','Owner A chat'),('${b}','Owner B chat') returning id,user_id`);
+const ownThread=threadRows.find(x=>x.user_id===a).id,otherThread=threadRows.find(x=>x.user_id===b).id;
+await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${a}',false);`);
+const {rows:visibleChats}=await db.query('select title from public.chat_threads');
+if(visibleChats.length!==1||visibleChats[0].title!=='Owner A chat')throw new Error('Chat owner isolation failed');
+await forbidden(`insert into public.chat_messages(user_id,thread_id,role,content) values ('${a}','${ownThread}','assistant','forged')`);
+await db.exec('reset role');
+await forbidden(`insert into public.chat_messages(user_id,thread_id,role,content) values ('${a}','${otherThread}','user','cross-tenant')`);
+const {rows:chatMessages}=await db.query(`insert into public.chat_messages(user_id,thread_id,role,content) values ('${a}','${ownThread}','assistant','A response'),('${b}','${otherThread}','assistant','B response') returning id,user_id`);
+const ownMessage=chatMessages.find(x=>x.user_id===a).id;
+await db.exec(`insert into public.chat_actions(user_id,thread_id,message_id,kind,payload) values ('${a}','${ownThread}','${ownMessage}','task','{"kind":"task","title":"Review source","body":"","due_at":null}')`);
+await db.exec(`set role authenticated; select set_config('request.jwt.claim.sub','${a}',false);`);
+const {rows:visibleMessages}=await db.query('select content from public.chat_messages');
+if(visibleMessages.length!==1||visibleMessages[0].content!=='A response')throw new Error('Chat message isolation failed');
+const {rows:blockedAction}=await db.query(`update public.chat_actions set status='approved' where user_id='${a}' returning id`);
+if(blockedAction.length)throw new Error('Client approved a chat action directly');
 await db.exec('reset role');
 console.log(`Migration applied in embedded PostgreSQL: ${rows[0].count} public tables; RLS read/write boundaries checked`);
 await db.close();

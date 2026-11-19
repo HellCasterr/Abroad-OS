@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { serverClient } from '@/lib/supabase/server';
 import { Workspace } from '@/components/workspace';
 
-const sections=['today','opportunities','scholarships','applications','calendar','documents','profile','notes','funding','advisor','monitor','settings'];
+const sections=['today','opportunities','scholarships','applications','calendar','documents','profile','notes','funding','chat','advisor','monitor','settings'];
 export default async function Section({params}:{params:Promise<{section:string}>}){
   const {section}=await params;
   if(!sections.includes(section)) redirect('/today');
