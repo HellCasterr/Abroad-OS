@@ -35,7 +35,8 @@ const funding=[
 export async function POST(request:Request){try{
   sameOrigin(request);const {db,user}=await requireUser();
   if(!process.env.OWNER_EMAIL || user.email?.toLowerCase()!==process.env.OWNER_EMAIL.toLowerCase())throw new Error('FORBIDDEN');
-  const {data:existing}=await db.from('profiles').select('user_id').eq('user_id',user.id).maybeSingle();if(existing)return NextResponse.json({ok:true,already_imported:true});
+  // Check server permissions before the first write. Every insert below is idempotent so a failed run can be resumed.
+  const admin=adminClient();
   const {error:profileError}=await db.from('profiles').upsert({user_id:user.id,email:user.email,full_name:'Bhomik Jain',nationality:'Indian',degree:'BE Computer Science and Engineering',institution:'Chandigarh University',graduation_year:2025,cgpa:7.81,aps_status:'verified',aps_reference:process.env.OWNER_APS_REFERENCE||null,dmat_score:'217/400 — General Academic',moi_status:'certificate dated 2026-10-08',ielts_status:'booked',ielts_test_date:'2026-12-09',facts_status:'user_reported',preferences:{goal:'15 high-quality applications',funding:'full funding first; tuition-free public universities second',regions:['Germany','Italy','France','Switzerland','Austria','Luxembourg','Finland','Sweden','Europe','Saudi Arabia','UAE']}},{onConflict:'user_id',ignoreDuplicates:true});
   if(profileError)throw profileError;
   for(const item of initial){
@@ -49,10 +50,15 @@ export async function POST(request:Request){try{
   for(const [institution,title,country,official_url] of watchlist){const {error}=await db.from('programmes').upsert({user_id:user.id,institution,title,country,official_url,intake:'2027 (verification required)',status:'verification_required'},{onConflict:'user_id,institution,title,intake',ignoreDuplicates:true});if(error)throw error;}
   for(const [name,funder,official_url] of funding){const {error}=await db.from('scholarships').upsert({user_id:user.id,name,funder,official_url,status:'verification_required'},{onConflict:'user_id,name',ignoreDuplicates:true});if(error)throw error;
     if(official_url&&['CYBERSURE Erasmus Mundus','EDISS Erasmus Mundus','DEAI Erasmus Mundus','IMSISS Erasmus Mundus','EMILDAI Erasmus Mundus'].includes(name)){
-      const {data:s}=await db.from('scholarships').select('id').eq('name',name).single();if(s)await db.from('sources').upsert({user_id:user.id,scholarship_id:s.id,url:official_url,title:`${name} official call`,authority:'official_unreviewed',monitor_enabled:true},{onConflict:'user_id,url',ignoreDuplicates:true});
+      const {data:s,error:sourceLookup}=await db.from('scholarships').select('id').eq('name',name).single();if(sourceLookup)throw sourceLookup;
+      if(s){const {error}=await db.from('sources').upsert({user_id:user.id,scholarship_id:s.id,url:official_url,title:`${name} official call`,authority:'official_unreviewed',monitor_enabled:true},{onConflict:'user_id,url',ignoreDuplicates:true});if(error)throw error;}
     }
   }
-  await db.from('tasks').insert([{user_id:user.id,title:'Upload submission confirmations for Göttingen, Padua, and Hildesheim',priority:3},{user_id:user.id,title:'Upload IELTS result after the 9 December Academic test',priority:2},{user_id:user.id,title:'Verify official deadlines for the 2027 watchlist',priority:3}]);
-  await adminClient().from('audit_logs').insert({user_id:user.id,action:'initial_import',entity:'profile'});
+  for(const [title,priority] of [
+    ['Upload submission confirmations for Göttingen, Padua, and Hildesheim',3],
+    ['Upload IELTS result after the 9 December Academic test',2],
+    ['Verify official deadlines for the 2027 watchlist',3]
+  ] as const){const {data:existingTask,error:lookup}=await db.from('tasks').select('id').eq('title',title).limit(1).maybeSingle();if(lookup)throw lookup;if(!existingTask){const {error}=await db.from('tasks').insert({user_id:user.id,title,priority});if(error)throw error;}}
+  const {error:auditError}=await admin.from('audit_logs').insert({user_id:user.id,action:'initial_import_checked',entity:'profile'});if(auditError)throw auditError;
   return NextResponse.json({ok:true,imported:4,watchlist:watchlist.length,funding:funding.length});
 }catch(e){return failure(e);}}
