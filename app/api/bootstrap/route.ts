@@ -47,7 +47,11 @@ export async function POST(request:Request){try{
     if(ae)throw ae;
   }
   for(const [institution,title,country,official_url] of watchlist){const {error}=await db.from('programmes').upsert({user_id:user.id,institution,title,country,official_url,intake:'2027 (verification required)',status:'verification_required'},{onConflict:'user_id,institution,title,intake',ignoreDuplicates:true});if(error)throw error;}
-  for(const [name,funder,official_url] of funding){const {error}=await db.from('scholarships').upsert({user_id:user.id,name,funder,official_url,status:'verification_required'},{onConflict:'user_id,name',ignoreDuplicates:true});if(error)throw error;}
+  for(const [name,funder,official_url] of funding){const {error}=await db.from('scholarships').upsert({user_id:user.id,name,funder,official_url,status:'verification_required'},{onConflict:'user_id,name',ignoreDuplicates:true});if(error)throw error;
+    if(official_url&&['CYBERSURE Erasmus Mundus','EDISS Erasmus Mundus','DEAI Erasmus Mundus','IMSISS Erasmus Mundus','EMILDAI Erasmus Mundus'].includes(name)){
+      const {data:s}=await db.from('scholarships').select('id').eq('name',name).single();if(s)await db.from('sources').upsert({user_id:user.id,scholarship_id:s.id,url:official_url,title:`${name} official call`,authority:'official_unreviewed',monitor_enabled:true},{onConflict:'user_id,url',ignoreDuplicates:true});
+    }
+  }
   await db.from('tasks').insert([{user_id:user.id,title:'Upload submission confirmations for Göttingen, Padua, and Hildesheim',priority:3},{user_id:user.id,title:'Upload IELTS result after the 9 December Academic test',priority:2},{user_id:user.id,title:'Verify official deadlines for the 2027 watchlist',priority:3}]);
   await adminClient().from('audit_logs').insert({user_id:user.id,action:'initial_import',entity:'profile'});
   return NextResponse.json({ok:true,imported:4,watchlist:watchlist.length,funding:funding.length});

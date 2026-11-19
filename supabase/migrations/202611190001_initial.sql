@@ -243,6 +243,20 @@ begin
 end $$;
 create trigger submission_evidence before insert or update on public.applications for each row execute function public.require_submission_evidence();
 
+create function public.set_requirement_status() returns trigger language plpgsql set search_path = '' as $$
+declare file_type text; file_size bigint;
+begin
+  if new.document_id is not null then
+    select mime_type,size_bytes into file_type,file_size from public.documents where id=new.document_id and user_id=new.user_id;
+    if file_type is null then raise exception 'Document must belong to the applicant'; end if;
+    if new.accepted_formats is not null and array_length(new.accepted_formats,1)>0 and not(file_type=any(new.accepted_formats)) then raise exception 'Document format does not satisfy requirement'; end if;
+    if new.max_bytes is not null and file_size>new.max_bytes then raise exception 'Document exceeds requirement size'; end if;
+  end if;
+  new.status := case when new.document_id is null then 'missing' else 'present' end;
+  return new;
+end $$;
+create trigger requirement_status before insert or update on public.document_requirements for each row execute function public.set_requirement_status();
+
 -- Foreign keys alone do not enforce tenant ownership of linked records.
 create function public.require_owned_links() returns trigger language plpgsql security definer set search_path = '' as $$
 declare field text; table_name text; linked uuid; owned boolean; body jsonb;

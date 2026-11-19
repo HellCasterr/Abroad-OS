@@ -35,6 +35,11 @@ await forbidden(`insert into public.applications(user_id,programme_id,status,sta
 await db.exec(`insert into public.applications(user_id,programme_id,status,payment_status) values ('${a}','${own}','saved','failed')`);
 const {rows:payment}=await db.query(`select status,payment_status from public.applications where programme_id='${own}'`);
 if(payment[0].status!=='saved'||payment[0].payment_status!=='failed')throw new Error('Failed payment was promoted to submitted');
+const {rows:files}=await db.query(`insert into public.documents(user_id,name,category,storage_path,mime_type,size_bytes,sha256) values ('${a}','scan.jpg','degree','${a}/scan.jpg','image/jpeg',1000,'hash') returning id`);
+const file=files[0].id;
+const {rows:reqs}=await db.query(`insert into public.document_requirements(user_id,programme_id,label,accepted_formats,max_bytes) values ('${a}','${own}','Transcript',array['application/pdf'],5000) returning id,status`);
+if(reqs[0].status!=='missing')throw new Error('Requirement did not start missing');
+await forbidden(`update public.document_requirements set document_id='${file}' where id='${reqs[0].id}'`);
 await db.exec('reset role');
 console.log(`Migration applied in embedded PostgreSQL: ${rows[0].count} public tables; RLS read/write boundaries checked`);
 await db.close();

@@ -1,6 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {deadlineInstant,displayDeadline,isOfficialUrl,reminderKey,sourceChangeKey} from '../lib/domain';
 import {approvedOfficialHost} from '../lib/monitor';
+import {nextOccurrence} from '../lib/recurrence';
 
 describe('deadline integrity',()=>{
   it('does not synthesize a clock time for date-only evidence',()=>{
@@ -21,6 +22,12 @@ describe('deadline integrity',()=>{
     expect(sourceChangeKey('source-id','hash-a')).toBe(sourceChangeKey('source-id','hash-a'));
     expect(sourceChangeKey('source-id','hash-a')).not.toBe(sourceChangeKey('source-id','hash-b'));
     expect(reminderKey('deadline-id','7d')).not.toBe(reminderKey('deadline-id','3d'));
+  });
+});
+describe('recurring reminders',()=>{
+  it('advances from a stale due date without creating a past reminder',()=>{
+    expect(nextOccurrence(new Date('2027-01-01T09:00:00Z'),'weekly',new Date('2027-01-20T10:00:00Z'))?.toISOString()).toBe('2027-01-22T09:00:00.000Z');
+    expect(nextOccurrence(new Date('2027-01-01T09:00:00Z'),'unknown',new Date('2027-01-20T10:00:00Z'))).toBeNull();
   });
 });
 describe('automated source boundary',()=>{

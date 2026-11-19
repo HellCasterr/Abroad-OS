@@ -1,6 +1,7 @@
 import {adminClient} from '@/lib/supabase/server';
 import {runSource} from '@/lib/monitor';
 import {reminderKey} from '@/lib/domain';
+import {nextOccurrence} from '@/lib/recurrence';
 import {Resend} from 'resend';
 
 const db=()=>adminClient();
@@ -45,6 +46,8 @@ async function reminders(){
       if(now>=target&&now<target+window){const key=reminderKey(d.id,label);await queue(d.user_id,key,`${label} remaining: ${d.label}`,`${d.label} is scheduled for ${d.date_local}${d.time_local?' at '+d.time_local:' (closing time not published)'}. Verify the official source in AbroadOS before acting.`);alerts++;}
     }
   }
+  const {data:overdue}=await db().from('tasks').select('id,due_at,recurrence').eq('status','open').not('recurrence','is',null).lt('due_at',new Date().toISOString()).limit(100);
+  for(const t of overdue??[]){const next=nextOccurrence(new Date(t.due_at),t.recurrence);if(next)await db().from('tasks').update({due_at:next.toISOString()}).eq('id',t.id);}
   const {data:tasks}=await db().from('tasks').select('id,user_id,title,due_at').eq('status','open').gte('due_at',new Date().toISOString()).lte('due_at',new Date(Date.now()+86400000).toISOString());
   for(const t of tasks??[]){await queue(t.user_id,`task:${t.id}:${istDay(new Date())}`,`Task due: ${t.title}`,`Your task is due ${t.due_at}. Open AbroadOS to review it.`);alerts++;}
   const mail=await deliverPending();return {checked:(deadlines??[]).length,changes:alerts,errors:mail.unconnected?['Resend not connected; in-app alerts remain available']:[]};
