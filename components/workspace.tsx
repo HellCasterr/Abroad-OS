@@ -13,14 +13,17 @@ const db=()=>browserClient();
 const n=(x:unknown)=>Number(x||0);
 const formatDate=(x:string)=>new Date(x).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata',day:'numeric',month:'short',year:'numeric'});
 
-export function Workspace({section,email,userId}:{section:string;email:string;userId:string}){
-  const [data,setData]=useState<Data>(empty);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [notice,setNotice]=useState('');const [search,setSearch]=useState('');const [mobile,setMobile]=useState(false);
+export function Workspace({section,email,userId,canImport}:{section:string;email:string;userId:string;canImport:boolean}){
+  const [data,setData]=useState<Data>(empty);const [loading,setLoading]=useState(true);const [error,setError]=useState('');const [setupIssue,setSetupIssue]=useState<'missing_schema'|null>(null);const [notice,setNotice]=useState('');const [search,setSearch]=useState('');const [mobile,setMobile]=useState(false);
   const load=useCallback(async()=>{
-    setLoading(true);const names=(Object.keys(empty) as (keyof Data)[]).filter(x=>x!=='profile');
-    const results=await Promise.all([db().from('profiles').select('*').eq('user_id',userId).maybeSingle(),...names.map(x=>db().from(x).select('*').order(x==='source_snapshots'?'checked_at':x==='document_requirements'?'id':'created_at',{ascending:false}).limit(250))]);
+    setLoading(true);setError('');
+    const profile=await db().from('profiles').select('*').eq('user_id',userId).maybeSingle();
+    if(profile.error){const missing=profile.error.code==='PGRST205'||profile.error.code==='42P01'||/schema cache|does not exist/i.test(profile.error.message);setSetupIssue(missing?'missing_schema':null);if(!missing)setError(profile.error.message);setData(empty);setLoading(false);return;}
+    setSetupIssue(null);const names=(Object.keys(empty) as (keyof Data)[]).filter(x=>x!=='profile');
+    const results=await Promise.all(names.map(x=>db().from(x).select('*').order(x==='source_snapshots'?'checked_at':x==='document_requirements'?'id':'created_at',{ascending:false}).limit(250)));
     const failure=results.find(r=>r.error);if(failure?.error)setError(failure.error.message);
-    const next={...empty,profile:results[0].data as Row|null};
-    names.forEach((key,i)=>{(next as Record<string,unknown>)[key]=results[i+1].data??[];});setData(next);setLoading(false);
+    const next={...empty,profile:profile.data as Row|null};
+    names.forEach((key,i)=>{(next as Record<string,unknown>)[key]=results[i].data??[];});setData(next);setLoading(false);
   },[userId]);
   useEffect(()=>{load();},[load]);
   async function mutate(table:keyof Data,entry:Row,success='Saved'){
@@ -38,7 +41,7 @@ export function Workspace({section,email,userId}:{section:string;email:string;us
       <main><div className="page-heading"><div><p className="eyebrow">ABROADOS / 2027 INTAKE</p><h1>{title[section]}</h1><p className="subheading">{section==='today'?'A clear view of what matters next.':'Your private workspace, backed by your own records.'}</p></div><div className="heading-actions"><button className="secondary" onClick={load}><RefreshCcw size={15}/> Refresh</button>{section==='today'&&<a className="primary" href="/notes"><Plus size={16}/> Add a task</a>}</div></div>
       {error&&<div className="banner danger" role="alert"><AlertCircle size={18}/>{error}<button onClick={()=>setError('')}>Dismiss</button></div>}
       {notice&&<div className="banner good" role="status"><Check size={18}/>{notice}<button onClick={()=>setNotice('')}>Dismiss</button></div>}
-      {loading?<div className="loading">Loading your workspace…</div>:!data.profile?<div className="setup-card"><div className="setup-icon"><ShieldCheck size={26}/></div><p className="eyebrow">FIRST-TIME SETUP</p><h2>Bring your 2027 applications home.</h2><p>The initial facts are user-reported. Upload your official records to verify them. This import is only available to the configured owner email.</p><button className="primary" onClick={seed}>Import Bhomik’s applicant record</button></div>:<>
+      {loading?<div className="loading">Loading your workspace…</div>:setupIssue==='missing_schema'?<div className="setup-card" role="status"><div className="setup-icon"><AlertCircle size={26}/></div><p className="eyebrow">DATABASE SETUP REQUIRED</p><h2>Create the AbroadOS tables</h2><p>Sign-in is connected, but this Supabase project does not have the AbroadOS migration yet. Open your project’s Supabase SQL Editor, run the migration below once, then refresh this page.</p><div className="setup-steps"><span>1 · Confirm the Supabase project URL in your deployment settings.</span><span>2 · Run the complete migration in that project’s SQL Editor.</span><span>3 · Refresh, then import the applicant record.</span></div><a className="primary" href="https://github.com/HellCasterr/Abroad-OS/blob/main/supabase/migrations/202611190001_initial.sql" target="_blank" rel="noopener noreferrer">Open migration SQL</a> <button className="secondary" onClick={load}>Check again</button><p className="footnote">The import button is unavailable until the tables and private storage bucket exist.</p></div>:!data.profile?<div className="setup-card"><div className="setup-icon"><ShieldCheck size={26}/></div><p className="eyebrow">FIRST-TIME SETUP</p><h2>Bring your 2027 applications home.</h2><p>The initial facts are user-reported. Upload your official records to verify them.</p>{canImport?<button className="primary" onClick={seed}>Import Bhomik’s applicant record</button>:<div className="status-note">This account is not the configured import owner. Set OWNER_EMAIL to your sign-in address in the deployment environment and redeploy, or sign in as that owner.</div>}</div>:<>
       {section==='today'&&<Today {...context}/>}
       {section==='opportunities'&&<Opportunities {...context} search={search} setSearch={setSearch}/>}
       {section==='scholarships'&&<Scholarships {...context}/>}

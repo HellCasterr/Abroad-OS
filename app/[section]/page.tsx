@@ -9,5 +9,6 @@ export default async function Section({params}:{params:Promise<{section:string}>
   if(!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return <div className="setup"><h1>AbroadOS needs Supabase configuration</h1><p>Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, then apply the migration. See README.md.</p></div>;
   const db=await serverClient();const {data:{user}}=await db.auth.getUser();
   if(!user)redirect('/login');
-  return <Workspace section={section} email={user.email??''} userId={user.id}/>;
+  const canImport=Boolean(process.env.OWNER_EMAIL&&user.email?.toLowerCase()===process.env.OWNER_EMAIL.toLowerCase());
+  return <Workspace section={section} email={user.email??''} userId={user.id} canImport={canImport}/>;
 }
