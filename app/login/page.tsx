@@ -1,0 +1,2 @@
+import { LoginForm } from '@/components/login-form';
+export default function Login(){return <div className="login-shell"><div className="login-intro"><div className="brand-mark">A<span>•</span></div><p className="eyebrow">YOUR 2027 ADMISSIONS DESK</p><h1>Every opportunity,<br/>in its proper place.</h1><p>Track applications, funding, documents, and evidence in one private workspace.</p><div className="login-foot">ABROADOS / PERSONAL COMMAND CENTER</div></div><LoginForm/></div>}

@@ -1,0 +1,11 @@
+import {NextResponse} from 'next/server';
+import {z} from 'zod';
+import {requireUser,adminClient} from '@/lib/supabase/server';
+import {sameOrigin,failure} from '@/lib/http';
+import {decrypt,googleReady} from '@/lib/calendar';
+export async function POST(request:Request){try{sameOrigin(request);if(!googleReady())throw new Error('Google Calendar not configured');const {db,user}=await requireUser();const {deadline_id}=z.object({deadline_id:z.uuid()}).parse(await request.json());const [{data:d},{data:connection}]=await Promise.all([db.from('deadlines').select('*').eq('id',deadline_id).eq('status','verified').single(),adminClient().from('calendar_connections').select('*').eq('user_id',user.id).single()]);if(!d||!connection)throw new Error('Verified deadline and calendar connection required');
+  const tokenRes=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:process.env.GOOGLE_CLIENT_ID!,client_secret:process.env.GOOGLE_CLIENT_SECRET!,refresh_token:decrypt(connection.encrypted_refresh_token),grant_type:'refresh_token'})});const token=await tokenRes.json();if(!tokenRes.ok)throw new Error('Google token refresh failed');
+  const allDay=!d.instant_utc;const start=allDay?{date:d.date_local}:{dateTime:d.instant_utc,timeZone:d.timezone};const end=allDay?{date:new Date(new Date(`${d.date_local}T00:00:00Z`).getTime()+86400000).toISOString().slice(0,10)}:{dateTime:new Date(new Date(d.instant_utc).getTime()+1800000).toISOString(),timeZone:d.timezone};
+  const event={summary:`AbroadOS: ${d.label}`,description:`Verified deadline. Source quote: ${d.evidence_excerpt||'See AbroadOS source record'}. Review portal before acting.`,start,end};
+  const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events',{method:'POST',headers:{authorization:`Bearer ${token.access_token}`,'content-type':'application/json'},body:JSON.stringify(event)});if(!r.ok)throw new Error('Google Calendar event creation failed');const created=await r.json();await adminClient().from('audit_logs').insert({user_id:user.id,action:'calendar_event_created',entity:'deadline',entity_id:d.id,after_data:{google_event_id:created.id}});return NextResponse.json({event_id:created.id});
+}catch(e){return failure(e);}}

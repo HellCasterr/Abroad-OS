@@ -1,0 +1,4 @@
+import {NextResponse} from 'next/server';
+import {requireUser} from '@/lib/supabase/server';
+import {googleReady} from '@/lib/calendar';
+export async function GET(){try{await requireUser();if(!googleReady())return NextResponse.json({error:'Google Calendar is not configured. Add OAuth client and encryption key.'},{status:503});const state=crypto.randomUUID();const callback=`${process.env.APP_URL}/api/calendar/callback`;const params=new URLSearchParams({client_id:process.env.GOOGLE_CLIENT_ID!,redirect_uri:callback,response_type:'code',scope:'https://www.googleapis.com/auth/calendar.events',access_type:'offline',prompt:'consent',state});const response=NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);response.cookies.set('calendar_oauth_state',state,{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'lax',maxAge:600,path:'/'});return response;}catch{return NextResponse.redirect(`${process.env.APP_URL}/login`);}}
