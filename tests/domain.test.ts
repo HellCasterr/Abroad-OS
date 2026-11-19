@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {deadlineInstant,displayDeadline,isOfficialUrl,reminderKey,sourceChangeKey} from '../lib/domain';
+import {deadlineInstant,displayDeadline,indiaDate,isOfficialUrl,isSubmittedState,reminderKey,sourceChangeKey} from '../lib/domain';
 import {approvedOfficialHost} from '../lib/monitor';
 import {nextOccurrence} from '../lib/recurrence';
 
@@ -28,6 +28,17 @@ describe('recurring reminders',()=>{
   it('advances from a stale due date without creating a past reminder',()=>{
     expect(nextOccurrence(new Date('2027-01-01T09:00:00Z'),'weekly',new Date('2027-01-20T10:00:00Z'))?.toISOString()).toBe('2027-01-22T09:00:00.000Z');
     expect(nextOccurrence(new Date('2027-01-01T09:00:00Z'),'unknown',new Date('2027-01-20T10:00:00Z'))).toBeNull();
+  });
+});
+describe('workspace summaries',()=>{
+  it('uses the applicant day in India across UTC midnight',()=>{
+    expect(indiaDate(new Date('2026-11-19T20:00:00Z'))).toBe('2026-11-20');
+  });
+  it('keeps submitted applications in the count after decisions',()=>{
+    expect(isSubmittedState('offer')).toBe(true);
+    expect(isSubmittedState('rejected')).toBe(true);
+    expect(isSubmittedState('paused')).toBe(false);
+    expect(isSubmittedState('preparing')).toBe(false);
   });
 });
 describe('automated source boundary',()=>{

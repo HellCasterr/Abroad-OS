@@ -6,11 +6,12 @@ A private Next.js admissions command center for Bhomik Jain's 2027 master's and 
 
 - Passwordless Supabase email authentication; owner-only, idempotent initial import of the applicant profile, three user-confirmed submitted applications, paused Pavia, a verification-required watchlist, funding leads, and starter tasks.
 - Authenticated dashboard, application and scholarship pipelines, programme shortlist, task and notes storage, natural-language and recurring task reminders, deadline calendar, expense ledger, and per-programme funding scenarios (tuition, living, stipend, upfront cash) in original currency.
-- Private Supabase Storage uploads (PDF/JPEG/PNG/DOCX/XLSX, 15 MB), SHA-256 metadata, short-lived signed preview URLs, deletion, row-level and folder-level access policies. A per-programme document readiness matrix records exact formats and file-size limits and enforces them when attaching a file.
+- Private Supabase Storage uploads (PDF/JPEG/PNG/DOCX/XLSX, 15 MB), SHA-256 metadata, short-lived signed preview URLs, authenticated original-file downloads, deletion, row-level and folder-level access policies. A per-programme document readiness matrix records exact formats and file-size limits and enforces them when attaching a file.
 - Server-side official HTML source monitor for an allowlist of approved domains. Checks robots.txt conservatively, validates public DNS and HTTPS, uses ETag/Last-Modified, stores content hashes/snapshots and quoted AI deadline candidates. A person reviews candidate dates before promotion to verified deadlines. Unsupported PDFs and redirects are flagged as unavailable.
 - Vercel Cron worker for source checks, near-deadline checks, reminder alerts and weekly digest. Execution log, deduplication, retry/backoff on email delivery, in-app alerts, and a Resend delivery ledger/webhook distinguish queued, provider accepted, delivered and failed.
-- OpenAI Responses API drafting for tailored application materials, saved editable versions, cautious user-reported facts, and refusal to invent an IELTS score or programme evidence.
+- OpenAI Responses API drafting for tailored application materials, saved editable versions, cautious user-reported facts, and refusal to invent an IELTS score or programme evidence. Manual blank drafts work without an OpenAI key.
 - Optional Google Calendar OAuth with server-side encrypted refresh token and individually authorized event creation. Date-only deadlines create all-day events; times preserve the source timezone.
+- Search and empty states for programme, scholarship, document and note lists; a separate scholarship status editor; editable applicant credentials and funding estimates; a Settings view showing whether integration credentials are present. A configured credential is not proof of successful delivery or a running schedule.
 
 ## Setup
 

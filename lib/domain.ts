@@ -45,3 +45,13 @@ export function isOfficialUrl(raw:string) {
 }
 
 export function words(text:string) {return text.trim().split(/\s+/).filter(Boolean).length;}
+
+export function indiaDate(now:Date=new Date()) {
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const part=(type:string)=>parts.find(x=>x.type===type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+export function isSubmittedState(status:string) {
+  return ['submitted','under_review','interview','offer','conditional_offer','rejected','waitlisted','accepted','declined','deferred'].includes(status);
+}
