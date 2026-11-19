@@ -144,6 +144,18 @@ create table public.expenses (
   created_at timestamptz not null default now()
 );
 
+create table public.funding_plans (
+  id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
+  programme_id uuid not null references public.programmes(id) on delete cascade,
+  currency text not null, duration_months integer not null default 24 check(duration_months between 1 and 60),
+  tuition_per_year numeric(12,2), semester_fees_per_year numeric(12,2), living_per_month numeric(12,2),
+  stipend_per_month numeric(12,2), initial_cash_required numeric(12,2),
+  scholarship_status text not null default 'unconfirmed' check(scholarship_status in ('unconfirmed','applied','awarded')),
+  source_url text, evidence_notes text, source_status text not null default 'user_reported',
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+  unique(user_id,programme_id)
+);
+
 create table public.alerts (
   id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade,
   dedupe_key text not null, title text not null, body text not null,
@@ -183,11 +195,12 @@ create index on public.tasks(user_id,status,due_at);
 create index on public.sources(monitor_enabled,next_check_at);
 create index on public.alerts(user_id,created_at desc);
 create index on public.documents(user_id,category);
+create index on public.funding_plans(user_id,programme_id);
 create index on public.notification_deliveries(status,next_attempt_at);
 
 -- Every private table carries its owner. The service-role worker is used only on trusted server routes.
 do $$ declare t text; begin
-  foreach t in array array['profiles','programmes','scholarships','applications','scholarship_applications','sources','tasks','notes','documents','document_requirements','drafts','expenses','alerts'] loop
+  foreach t in array array['profiles','programmes','scholarships','applications','scholarship_applications','sources','tasks','notes','documents','document_requirements','drafts','expenses','funding_plans','alerts'] loop
     execute format('alter table public.%I enable row level security',t);
     execute format('create policy owner_all on public.%I for all to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()))',t);
   end loop;
@@ -278,7 +291,7 @@ begin
   return new;
 end $$;
 do $$ declare t text; begin
-  foreach t in array array['applications','scholarship_applications','sources','source_snapshots','deadlines','tasks','notes','documents','document_requirements','drafts','expenses'] loop
+  foreach t in array array['applications','scholarship_applications','sources','source_snapshots','deadlines','tasks','notes','documents','document_requirements','drafts','expenses','funding_plans'] loop
     execute format('create trigger owner_links before insert or update on public.%I for each row execute function public.require_owned_links()',t);
   end loop;
 end $$;
